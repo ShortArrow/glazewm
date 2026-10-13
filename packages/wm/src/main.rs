@@ -11,7 +11,13 @@
 
 #[cfg(target_os = "macos")]
 use std::io::IsTerminal;
-use std::{env, path::PathBuf, process, time::Duration};
+use std::{
+  env,
+  path::PathBuf,
+  process,
+  sync::atomic::{AtomicBool, Ordering},
+  time::Duration,
+};
 
 use anyhow::{Context, Error};
 use tokio::{process::Command, signal};
@@ -176,7 +182,7 @@ async fn start_wm(
     &mut config,
   ) {
     tracing::error!("{:?}", err);
-    dispatcher.show_error_dialog("Non-fatal error", &err.to_string());
+    show_non_fatal_error(dispatcher, &err);
   }
 
   // Create an interval for periodically cleaning up invalid windows.
@@ -288,7 +294,7 @@ async fn start_wm(
 
     if let Err(err) = res {
       tracing::error!("{:?}", err);
-      dispatcher.show_error_dialog("Non-fatal error", &err.to_string());
+      show_non_fatal_error(dispatcher, &err);
     }
   }
 
@@ -296,6 +302,27 @@ async fn start_wm(
   wm.cleanup(&mut config, &mut ipc_server);
 
   Ok(())
+}
+
+/// Shows a non-fatal error dialog without blocking the caller, so that
+/// the WM keeps handling events and IPC messages while it is open.
+///
+/// At most one such dialog is open at a time. Errors raised while it is
+/// open are only logged.
+fn show_non_fatal_error(dispatcher: &Dispatcher, err: &Error) {
+  static IS_DIALOG_OPEN: AtomicBool = AtomicBool::new(false);
+
+  if IS_DIALOG_OPEN.swap(true, Ordering::AcqRel) {
+    return;
+  }
+
+  let dispatcher = dispatcher.clone();
+  let message = err.to_string();
+
+  std::thread::spawn(move || {
+    dispatcher.show_error_dialog("Non-fatal error", &message);
+    IS_DIALOG_OPEN.store(false, Ordering::Release);
+  });
 }
 
 /// Initialize logging with the specified verbosity level.
