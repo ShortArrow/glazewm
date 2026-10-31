@@ -1,6 +1,7 @@
 use anyhow::Context;
 use wm_common::try_warn;
 
+use super::restore_windows_minimized_by_display_change;
 use crate::{
   commands::monitor::{
     add_monitor, move_bounded_workspaces_to_new_monitor, remove_monitor,
@@ -17,6 +18,8 @@ pub fn handle_display_settings_changed(
   config: &UserConfig,
 ) -> anyhow::Result<()> {
   tracing::info!("Display settings changed.");
+  state.display_change_timestamp = Some(std::time::Instant::now());
+  restore_windows_minimized_by_display_change(state, config)?;
 
   // Ignore the event if retrieval of the displays or their properties
   // fails (can happen transiently during sleep/wake).

@@ -54,6 +54,16 @@ pub struct WmState {
   /// Used to decide whether to override incoming focus events.
   pub unmanaged_or_minimized_timestamp: Option<Instant>,
 
+  /// Time of the last display settings change.
+  ///
+  /// Used to tell a window the OS minimized for a display change from one
+  /// the user minimized.
+  pub display_change_timestamp: Option<Instant>,
+
+  /// Windows taken as minimized by the user, with when, so that a display
+  /// change reported just after can take them as minimized by the OS.
+  pub recent_minimizes: Vec<(WindowContainer, Instant)>,
+
   /// Configs of currently enabled binding modes.
   pub binding_modes: Vec<BindingModeConfig>,
 
@@ -90,6 +100,8 @@ impl WmState {
       prev_effects_window: None,
       recent_workspace_name: None,
       unmanaged_or_minimized_timestamp: None,
+      display_change_timestamp: None,
+      recent_minimizes: Vec::new(),
       binding_modes: Vec::new(),
       ignored_windows: Vec::new(),
       is_paused: false,
