@@ -80,9 +80,24 @@ pub fn move_bounded_workspaces_to_new_monitor(
 
   // Make sure the monitor has at least one workspace. This will
   // automatically prioritize bound workspace configs and fall back to the
-  // first available one if needed.
+  // first available one if needed. When every configured workspace is
+  // already active, a workspace another monitor is not displaying is
+  // moved here instead.
   if monitor.child_count() == 0 {
-    activate_workspace(None, Some(monitor.clone()), state, config)?;
+    let lent_workspace = config
+      .inactive_workspace_configs(&state.workspaces())
+      .is_empty()
+      .then(|| workspace_to_lend(monitor, &state.monitors()))
+      .flatten();
+
+    match lent_workspace {
+      Some(workspace) => {
+        move_workspace_to_monitor(&workspace, monitor, state, config)?;
+      }
+      None => {
+        activate_workspace(None, Some(monitor.clone()), state, config)?;
+      }
+    }
   }
 
   Ok(())
@@ -151,4 +166,117 @@ pub fn move_workspace_to_monitor(
   });
 
   Ok(())
+}
+
+/// Finds a workspace that another monitor can give up to `monitor`.
+///
+/// The workspace is one its monitor is not displaying, is not bound to
+/// its monitor, and is not its monitor's only workspace, so that every
+/// monitor keeps a displayed workspace.
+fn workspace_to_lend(
+  monitor: &Monitor,
+  monitors: &[Monitor],
+) -> Option<Workspace> {
+  monitors
+    .iter()
+    .filter(|other| other.id() != monitor.id() && other.child_count() > 1)
+    .find_map(|other| {
+      let displayed = other.displayed_workspace()?;
+      other.workspaces().into_iter().find(|workspace| {
+        workspace.id() != displayed.id()
+          && workspace.config().bind_to_monitor
+            != Some(u32::try_from(other.index()).unwrap_or(u32::MAX))
+      })
+    })
+}
+
+#[cfg(test)]
+mod tests {
+  use wm_common::{GapsConfig, TilingDirection, WorkspaceConfig};
+
+  use super::workspace_to_lend;
+  use crate::{
+    commands::container::attach_container,
+    models::{Monitor, RootContainer, Workspace},
+  };
+
+  fn workspace(name: &str, bind_to_monitor: Option<u32>) -> Workspace {
+    Workspace::new(
+      WorkspaceConfig {
+        name: name.to_string(),
+        display_name: None,
+        bind_to_monitor,
+        keep_alive: true,
+      },
+      GapsConfig::default(),
+      TilingDirection::Horizontal,
+    )
+  }
+
+  /// Monitors attached in order to one root, each holding its
+  /// workspaces, of which the first is displayed.
+  fn monitors(workspaces: Vec<Vec<Workspace>>) -> Vec<Monitor> {
+    let root = RootContainer::new();
+    workspaces
+      .into_iter()
+      .map(|workspaces| {
+        let monitor = Monitor::mock().workspaces(workspaces).call();
+        attach_container(
+          &monitor.clone().into(),
+          &root.clone().into(),
+          None,
+        )
+        .unwrap();
+        monitor
+      })
+      .collect()
+  }
+
+  fn name(workspace: Option<Workspace>) -> Option<String> {
+    workspace.map(|workspace| workspace.config().name)
+  }
+
+  #[test]
+  fn lends_a_workspace_that_another_monitor_is_not_displaying() {
+    let monitors = monitors(vec![
+      vec![workspace("1", None), workspace("2", None)],
+      vec![],
+    ]);
+
+    assert_eq!(
+      name(workspace_to_lend(&monitors[1], &monitors)),
+      Some("2".to_string())
+    );
+  }
+
+  #[test]
+  fn does_not_take_the_only_workspace_of_another_monitor() {
+    let monitors = monitors(vec![vec![workspace("1", None)], vec![]]);
+
+    assert_eq!(name(workspace_to_lend(&monitors[1], &monitors)), None);
+  }
+
+  #[test]
+  fn does_not_take_a_workspace_bound_to_the_monitor_it_is_on() {
+    let monitors = monitors(vec![
+      vec![workspace("1", None), workspace("2", Some(0))],
+      vec![],
+    ]);
+
+    assert_eq!(name(workspace_to_lend(&monitors[1], &monitors)), None);
+  }
+
+  #[test]
+  fn takes_a_workspace_bound_to_a_monitor_index_that_is_not_its_own() {
+    let monitors = monitors(vec![
+      vec![workspace("1", None), workspace("2", Some(1))],
+      vec![],
+      vec![workspace("3", None), workspace("4", None)],
+    ]);
+
+    assert_eq!(
+      name(workspace_to_lend(&monitors[2], &monitors)),
+      Some("2".to_string())
+    );
+  }
 }
