@@ -78,13 +78,6 @@ pub fn move_bounded_workspaces_to_new_monitor(
     }
   }
 
-  // Make sure the monitor has at least one workspace. This will
-  // automatically prioritize bound workspace configs and fall back to the
-  // first available one if needed.
-  if monitor.child_count() == 0 {
-    activate_workspace(None, Some(monitor.clone()), state, config)?;
-  }
-
   Ok(())
 }
 
@@ -129,19 +122,12 @@ pub fn move_workspace_to_monitor(
     .queue_container_to_redraw(workspace.clone())
     .queue_container_to_redraw(displayed_workspace);
 
-  match origin_monitor.child_count() {
-    0 => {
-      // Prevent origin monitor from having no workspaces.
-      activate_workspace(None, Some(origin_monitor), state, config)?;
-    }
-    _ => {
-      // Redraw the workspace on the origin monitor.
-      state.pending_sync.queue_container_to_redraw(
-        origin_monitor
-          .displayed_workspace()
-          .context("No displayed workspace.")?,
-      );
-    }
+  // Redraw the workspace on the origin monitor. An origin monitor left
+  // without a workspace gets one from `fill_empty_monitors`.
+  if let Some(origin_workspace) = origin_monitor.displayed_workspace() {
+    state
+      .pending_sync
+      .queue_container_to_redraw(origin_workspace);
   }
 
   sort_workspaces(target_monitor, config)?;

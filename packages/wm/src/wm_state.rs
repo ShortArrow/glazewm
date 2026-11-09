@@ -17,6 +17,7 @@ use crate::{
     general::platform_sync,
     monitor::{add_monitor, move_bounded_workspaces_to_new_monitor},
     window::{manage_window, unmanage_window},
+    workspace::fill_empty_monitors,
   },
   models::{
     Container, Monitor, NativeMonitorProperties, RootContainer,
@@ -120,6 +121,8 @@ impl WmState {
         move_bounded_workspaces_to_new_monitor(&monitor, self, config)?;
       }
     }
+
+    fill_empty_monitors(self, config)?;
 
     // Manage windows in reverse z-order (bottom to top). This helps to
     // preserve the original stacking order.
