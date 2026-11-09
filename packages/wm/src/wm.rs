@@ -31,7 +31,7 @@ use crate::{
       update_window_state, WindowPositionTarget,
     },
     workspace::{
-      focus_workspace, move_workspace_in_direction,
+      fill_empty_monitors, focus_workspace, move_workspace_in_direction,
       update_workspace_config,
     },
   },
@@ -80,7 +80,7 @@ impl WindowManager {
   ) -> anyhow::Result<()> {
     let state = &mut self.state;
 
-    match event {
+    let result = match event {
       PlatformEvent::DisplaySettingsChanged => {
         handle_display_settings_changed(state, config)
       }
@@ -141,13 +141,17 @@ impl WindowManager {
           handle_window_destroyed(window_id, state)
         }
       },
-    }?;
+    };
+
+    // An event handler that fails partway may leave a monitor without a
+    // workspace, so every monitor gets one even then.
+    fill_empty_monitors(state, config)?;
 
     if !state.is_paused && state.pending_sync.has_changes() {
       platform_sync(state, config)?;
     }
 
-    Ok(())
+    result
   }
 
   pub fn process_commands(
@@ -173,13 +177,17 @@ impl WindowManager {
       subject_container,
       state,
       config,
-    )?;
+    );
+
+    // A command that fails partway may leave a monitor without a
+    // workspace, so every monitor gets one even then.
+    fill_empty_monitors(state, config)?;
 
     if state.pending_sync.has_changes() {
       platform_sync(state, config)?;
     }
 
-    Ok(new_subject_container_id)
+    new_subject_container_id
   }
 
   pub fn run_commands(

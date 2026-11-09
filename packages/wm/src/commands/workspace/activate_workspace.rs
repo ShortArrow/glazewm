@@ -31,6 +31,25 @@ pub fn activate_workspace(
     config,
   )?;
 
+  activate_workspace_from_config(
+    workspace_config,
+    target_monitor,
+    state,
+    config,
+  )
+}
+
+/// Activates a workspace made from `workspace_config` on the target
+/// monitor.
+///
+/// If no target monitor is provided, the workspace is activated on
+/// whichever monitor it is bound to, or the currently focused monitor.
+pub fn activate_workspace_from_config(
+  workspace_config: WorkspaceConfig,
+  target_monitor: Option<Monitor>,
+  state: &mut WmState,
+  config: &UserConfig,
+) -> anyhow::Result<()> {
   let target_monitor = target_monitor
     .or_else(|| {
       workspace_config
@@ -58,7 +77,7 @@ pub fn activate_workspace(
   };
 
   let workspace = Workspace::new(
-    workspace_config.clone(),
+    workspace_config,
     config.value.gaps.clone(),
     tiling_direction,
   );

@@ -2,7 +2,7 @@ use anyhow::Context;
 use wm_common::WmEvent;
 use wm_platform::Direction;
 
-use super::{activate_workspace, deactivate_workspace, sort_workspaces};
+use super::{deactivate_workspace, sort_workspaces};
 use crate::{
   commands::container::move_container_within_tree,
   models::Workspace,
@@ -54,19 +54,12 @@ pub fn move_workspace_in_direction(
       .queue_container_to_redraw(workspace.clone())
       .queue_container_to_redraw(displayed_workspace);
 
-    match origin_monitor.child_count() {
-      0 => {
-        // Prevent origin monitor from having no workspaces.
-        activate_workspace(None, Some(origin_monitor), state, config)?;
-      }
-      _ => {
-        // Redraw the workspace on the origin monitor.
-        state.pending_sync.queue_container_to_redraw(
-          origin_monitor
-            .displayed_workspace()
-            .context("No displayed workspace.")?,
-        );
-      }
+    // Redraw the workspace on the origin monitor. An origin monitor left
+    // without a workspace gets one from `fill_empty_monitors`.
+    if let Some(origin_workspace) = origin_monitor.displayed_workspace() {
+      state
+        .pending_sync
+        .queue_container_to_redraw(origin_workspace);
     }
 
     // Get empty workspace to destroy (if one is found). Cannot destroy
