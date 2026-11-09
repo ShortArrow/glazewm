@@ -1,13 +1,10 @@
 use anyhow::Context;
-use tracing::warn;
 use wm_common::WmEvent;
 use wm_platform::Direction;
 
 use super::{activate_workspace, deactivate_workspace, sort_workspaces};
 use crate::{
-  commands::{
-    container::move_container_within_tree, monitor::move_workspace_to_monitor,
-  },
+  commands::container::move_container_within_tree,
   models::Workspace,
   traits::{CommonGetters, PositionGetters, WindowGetters},
   user_config::UserConfig,
@@ -29,25 +26,6 @@ pub fn move_workspace_in_direction(
     let displayed_workspace = target_monitor
       .displayed_workspace()
       .context("No displayed workspace.")?;
-
-    // When the workspace is the only one on its monitor and no workspace
-    // config is left to activate there, the two monitors swap workspaces.
-    let swaps_workspaces = origin_monitor.child_count() == 1
-      && config
-        .inactive_workspace_configs(&state.workspaces())
-        .is_empty();
-
-    if swaps_workspaces
-      && displayed_workspace
-        .config()
-        .bind_to_monitor
-        .is_some_and(|index| index as usize == target_monitor.index())
-    {
-      warn!(
-        "Not moving workspace {workspace}: its monitor would be left without a workspace."
-      );
-      return Ok(());
-    }
 
     move_container_within_tree(
       &workspace.clone().into(),
@@ -74,17 +52,9 @@ pub fn move_workspace_in_direction(
       .pending_sync
       .queue_cursor_jump()
       .queue_container_to_redraw(workspace.clone())
-      .queue_container_to_redraw(displayed_workspace.clone());
+      .queue_container_to_redraw(displayed_workspace);
 
     match origin_monitor.child_count() {
-      0 if swaps_workspaces => {
-        move_workspace_to_monitor(
-          &displayed_workspace,
-          &origin_monitor,
-          state,
-          config,
-        )?;
-      }
       0 => {
         // Prevent origin monitor from having no workspaces.
         activate_workspace(None, Some(origin_monitor), state, config)?;
