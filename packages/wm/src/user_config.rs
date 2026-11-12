@@ -47,14 +47,24 @@ impl UserConfig {
 
     let (config_value, config_str) = Self::read(&config_path)?;
 
+    Ok(Self::from_parsed(config_path, config_value, config_str))
+  }
+
+  /// Creates an instance of `UserConfig` from an already parsed config
+  /// value, without reading the file at `config_path`.
+  pub(crate) fn from_parsed(
+    config_path: PathBuf,
+    config_value: ParsedConfig,
+    config_str: String,
+  ) -> Self {
     let window_rules_by_event = Self::window_rules_by_event(&config_value);
 
-    Ok(Self {
+    Self {
       path: config_path,
       value: config_value,
       value_str: config_str,
       window_rules_by_event,
-    })
+    }
   }
 
   /// Reads and validates the user config from the given path.
