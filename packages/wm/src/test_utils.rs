@@ -3,10 +3,12 @@
 //! This module provides default values and helper functions used by the
 //! mock builders in the model modules.
 
+use std::path::PathBuf;
+
 use bon::bon;
 use wm_common::{
-  FloatingStateConfig, GapsConfig, TilingDirection, WindowState,
-  WorkspaceConfig,
+  FloatingStateConfig, GapsConfig, ParsedConfig, TilingDirection,
+  WindowState, WorkspaceConfig,
 };
 use wm_platform::{Display, NativeWindow, Rect, RectDelta};
 
@@ -18,6 +20,7 @@ use crate::{
     Workspace,
   },
   traits::TilingSizeGetters,
+  user_config::UserConfig,
 };
 
 pub const MOCK_MONITOR_WIDTH: i32 = 1680;
@@ -256,5 +259,24 @@ impl Workspace {
     }
 
     workspace
+  }
+}
+
+#[bon]
+impl UserConfig {
+  /// Creates a `UserConfig` with the given workspace configs and default
+  /// values for everything else, without reading a config file.
+  #[builder]
+  pub fn mock(
+    #[builder(default = vec![])] workspaces: Vec<WorkspaceConfig>,
+  ) -> Self {
+    Self::from_parsed(
+      PathBuf::new(),
+      ParsedConfig {
+        workspaces,
+        ..ParsedConfig::default()
+      },
+      String::new(),
+    )
   }
 }
