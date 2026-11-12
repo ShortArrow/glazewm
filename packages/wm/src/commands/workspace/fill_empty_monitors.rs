@@ -140,11 +140,14 @@ fn temporary_workspace_config(taken_names: &[String]) -> WorkspaceConfig {
 #[cfg(test)]
 mod tests {
   use wm_common::{GapsConfig, TilingDirection, WorkspaceConfig};
+  use wm_platform::Dispatcher;
 
-  use super::{workspace_source, WorkspaceSource};
+  use super::{fill_empty_monitors, workspace_source, WorkspaceSource};
   use crate::{
     commands::container::attach_container,
     models::{Monitor, RootContainer, Workspace},
+    user_config::UserConfig,
+    wm_state::WmState,
   };
 
   fn workspace_config(
@@ -283,5 +286,36 @@ mod tests {
     };
     assert!(!config.keep_alive);
     assert_eq!(config.bind_to_monitor, None);
+  }
+
+  #[test]
+  fn every_monitor_displays_a_workspace_when_every_config_is_active() {
+    let (event_tx, _event_rx) = tokio::sync::mpsc::unbounded_channel();
+    let (exit_tx, _exit_rx) = tokio::sync::mpsc::unbounded_channel();
+    let mut state = WmState::new(Dispatcher::mock(), event_tx, exit_tx);
+    let config = UserConfig::mock()
+      .workspaces(vec![
+        workspace_config("1", None),
+        workspace_config("2", None),
+      ])
+      .call();
+    for monitor_workspaces in
+      [vec![workspace("1", None), workspace("2", None)], vec![]]
+    {
+      let monitor = Monitor::mock().workspaces(monitor_workspaces).call();
+      attach_container(
+        &monitor.into(),
+        &state.root_container.clone().into(),
+        None,
+      )
+      .unwrap();
+    }
+
+    fill_empty_monitors(&mut state, &config).unwrap();
+
+    assert!(state
+      .monitors()
+      .iter()
+      .all(|monitor| monitor.displayed_workspace().is_some()));
   }
 }
