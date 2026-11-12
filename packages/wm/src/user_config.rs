@@ -388,3 +388,70 @@ impl UserConfig {
     })
   }
 }
+
+#[cfg(test)]
+mod tests {
+  use wm_common::WorkspaceConfig;
+
+  use super::UserConfig;
+  use crate::models::Workspace;
+
+  fn workspace_config(
+    name: &str,
+    bind_to_monitor: Option<u32>,
+  ) -> WorkspaceConfig {
+    WorkspaceConfig {
+      name: name.to_string(),
+      display_name: None,
+      bind_to_monitor,
+      keep_alive: false,
+    }
+  }
+
+  fn next_inactive_name(
+    config: &UserConfig,
+    active_workspaces: &[Workspace],
+  ) -> Option<String> {
+    config
+      .next_inactive_workspace_config(active_workspaces)
+      .map(|workspace_config| workspace_config.name.clone())
+  }
+
+  #[test]
+  fn next_inactive_workspace_config_prefers_one_bound_to_no_monitor() {
+    let config = UserConfig::mock()
+      .workspaces(vec![
+        workspace_config("1", Some(0)),
+        workspace_config("2", None),
+      ])
+      .call();
+
+    assert_eq!(next_inactive_name(&config, &[]), Some("2".to_string()));
+  }
+
+  #[test]
+  fn next_inactive_workspace_config_falls_back_to_a_bound_one() {
+    let config = UserConfig::mock()
+      .workspaces(vec![
+        workspace_config("1", Some(0)),
+        workspace_config("2", None),
+      ])
+      .call();
+    let active = [Workspace::mock().name("2".to_string()).call()];
+
+    assert_eq!(
+      next_inactive_name(&config, &active),
+      Some("1".to_string())
+    );
+  }
+
+  #[test]
+  fn next_inactive_workspace_config_is_none_when_every_config_is_active() {
+    let config = UserConfig::mock()
+      .workspaces(vec![workspace_config("1", None)])
+      .call();
+    let active = [Workspace::mock().name("1".to_string()).call()];
+
+    assert_eq!(next_inactive_name(&config, &active), None);
+  }
+}
